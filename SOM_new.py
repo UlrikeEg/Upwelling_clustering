@@ -249,23 +249,92 @@ elif method == "SOM":
 
 sorted_clusters = np.argsort(cluster_counts)
 
+data_to_use['U_Geo_Oscar'] = data_to_use['U_Geo_Oscar'].transpose('time', 'lat', 'lon')
+
+
+#%% Mean values for each cluster
+
+
+show_median_values = 0
+
+if show_median_values == 1 :
+    
+    data_to_use_humb = data_to_use.sel(lat=slice(40.75,41), lon=slice(-124.75, -124.5))
+    data_to_use_morro = data_to_use.sel(lat=slice(35.5,35.75), lon=slice(-122, -121.75))
+    
+    # data_to_use_humb = data_to_use.sel(lat=Humboldt_coords[0], lon=Humboldt_coords[1], method = "nearest")
+    # data_to_use_morro = data_to_use.sel(lat=Morro_coords[0], lon=Morro_coords[1], method = "nearest")
+         
+    
+    for pos, i in enumerate(sorted_clusters):
+        
+        print (i)
+        print ("---------")
+        
+        params = ['CUTI_Oscar', 'sst_anomaly', 'U_Ek', "U_Geo_Oscar" ] # , 'CHL'] 
+        
+        ### Indices of this cluster
+        cluster_indices = np.where(cluster_assignments == i)[0]
+        cluster_time_indeces = data_to_use.time.values.reshape(data_to_use.time.shape[0], -1)[cluster_indices]
+        cluster_sst_time_indeces = cluster_time_indeces[cluster_time_indeces >= ostia_short.time.values[0]] 
+                        
+       
+        
+        
+        ### loop over paramters to average
+        for j,par in enumerate(params, start=1):
+            
+            print(par)
+                
+            # Humboldt
+            # par_2d = data_to_use_humb[par].values  # Reshape the data_to_use data into a 2D array (time as rows, lat*lon as columns)
+            # par_2d[par_2d == 0] = np.nan 
+            # mean_pattern = np.nanmedian(par_2d[cluster_indices], axis=0) 
+            
+            
+            par_2d = data_to_use_humb[par].values.reshape(data_to_use[par].shape[0], -1)  # Reshape the data_to_use data into a 2D array (time as rows, lat*lon as columns)
+            mean_pattern = np.nanmean(par_2d[cluster_indices], axis=0) 
+            mean_pattern[mean_pattern == 0] = np.nan 
+            
+            mean_pattern = np.nanmean(mean_pattern) # average over Humboldt area
+            
+            print(f"Humboldt: {mean_pattern.round(2)}")
+            
+
+            
+            # Morro
+            # par_2d = data_to_use_morro[par].values  # Reshape the data_to_use data into a 2D array (time as rows, lat*lon as columns)
+            # par_2d[par_2d == 0] = np.nan 
+            # mean_pattern = np.nanmedian(par_2d[cluster_indices], axis=0)
+            
+            par_2d = data_to_use_morro[par].values.reshape(data_to_use[par].shape[0], -1)  # Reshape the data_to_use data into a 2D array (time as rows, lat*lon as columns)
+            mean_pattern = np.nanmean(par_2d[cluster_indices], axis=0)    
+            mean_pattern[mean_pattern == 0] = np.nan 
+            
+            mean_pattern = np.nanmean(mean_pattern) # average over Morro area
+            
+            
+            print(f"Morro: {mean_pattern.round(2)}")
+
+        
+
 
 #%% Visualize the clusters (patterns)
 
 additional_params = ['sst_anomaly', "U_Geo_Oscar", 'U_Ek' ] # , 'CHL']  
 
-data_to_use['U_Geo_Oscar'] = data_to_use['U_Geo_Oscar'].transpose('time', 'lat', 'lon')
 
 min_cuti = -3
 max_cuti = 3   
 
     
 plt.rcParams.update({'font.size': 12})
-fig = plt.figure(figsize=(10, 9))
-plt.suptitle(f"Satellite CUTI "+method+f" clusters {data_to_use.time[0].values.astype('datetime64[Y]').astype(int) + 1970} to {data_to_use.time[-1].values.astype('datetime64[Y]').astype(int) + 1970}")
+fig = plt.figure(figsize=(10, 11))
+# plt.suptitle(f"Satellite CUTI "+method+f" clusters {data_to_use.time[0].values.astype('datetime64[Y]').astype(int) + 1970} to {data_to_use.time[-1].values.astype('datetime64[Y]').astype(int) + 1970}")
 
 
 for pos, i in enumerate(sorted_clusters):
+    
 #for i in range(num_clusters):
     
     main_colormap = 'viridis'
@@ -279,13 +348,22 @@ for pos, i in enumerate(sorted_clusters):
     # Calculate mean of each pattern
     mean_pattern = np.mean(u_wind_normalized[cluster_indices], axis=0)
     mean_pattern = mean_pattern.reshape(u_wind['lat'].shape[0], u_wind['lon'].shape[0])
-    mean_pattern[mean_pattern == 0] = np.nan 
+    mean_pattern[mean_pattern == 0] = np.nan    
     
     ax = plt.subplot(len(additional_params)+2, num_clusters, pos+1, projection=ccrs.PlateCarree())
     plt.pcolormesh(lon_mesh, lat_mesh, mean_pattern, cmap=main_colormap, transform=ccrs.PlateCarree(),
                    vmin = min_cuti, 
                    vmax = max_cuti) 
-    plt.title(f'Cluster {i+1} (N={cluster_counts[i]})') 
+    #plt.title(f'Cluster {i+1} (N={cluster_counts[i]})') 
+    
+    if pos  == 0:
+        plt.title("(1) Near-neutral\n")
+    elif pos  == 1:
+        plt.title("(2) Downwelling\n")
+    elif pos  == 2:
+        plt.title("(3) Strong upwelling,\nnorthern focus")
+    elif pos  == 3:
+        plt.title("(4) Strong upwelling,\nsouthern focus")
     
     # Model CUTI   
     cuti = CUTI[CUTI.index.isin(cluster_time_indeces.flatten())].mean()
@@ -339,6 +417,9 @@ for pos, i in enumerate(sorted_clusters):
     ticks = out_hist[1].astype(int)
     labels = [calendar.month_abbr[m] for m in ticks]
     plt.xticks(ticks[::3], labels[::3])
+    
+    if pos==0:
+        ax.set_ylabel("Probability")
 
     
     if pos==num_clusters-1:
@@ -351,9 +432,9 @@ for pos, i in enumerate(sorted_clusters):
         if par == "sst_anomaly":
             label = "SST anomaly ($^\circ$C)"
         elif par == "U_Ek":
-            label = "U$^{Ek}$ (m$^2$/s)"
+            label = "U$_{Ek}$ (m$^2$/s)"
         elif par == "U_Geo_Oscar":
-            label = "U$^{Geo}$ (m$^2$/s)"
+            label = "U$_{Geo}$ (m$^2$/s)"
         elif par == "wind_speed":
             label = "Wind speed (m/s)"
         elif par == "U_Geo_Oscar":
@@ -381,6 +462,8 @@ for pos, i in enumerate(sorted_clusters):
             mean_pattern = np.nanmean(par_2d, axis=0)
             mean_pattern = mean_pattern.reshape(ostia_short[par].shape[1], ostia_short[par].shape[2])
             mean_pattern[mean_pattern == 0] = np.nan 
+            
+
         
         else:  
             par_2d = data_to_use[par].values.reshape(data_to_use[par].shape[0], -1)  # Reshape the data_to_use data into a 2D array (time as rows, lat*lon as columns)
@@ -435,7 +518,7 @@ plt.tight_layout()
 #%% Plot ERA 5 data for cluster assignments
 
 
-plot_ERA_5 = 0
+plot_ERA_5 = 1
 
 if plot_ERA_5 == 1:
     
@@ -468,10 +551,12 @@ if plot_ERA_5 == 1:
      
      max_pres = 5750
      min_pres = 5450
+     
+     #%%
         
     
-     fig = plt.figure(figsize=(15, 9))
-     plt.suptitle(f"Satellite CUTI "+method+f" clusters {data_to_use.time[0].values.astype('datetime64[Y]').astype(int) + 1970} to {data_to_use.time[-1].values.astype('datetime64[Y]').astype(int) + 1970}")
+     fig = plt.figure(figsize=(15, 9), constrained_layout=True)
+    # plt.suptitle(f"Satellite CUTI "+method+f" clusters {data_to_use.time[0].values.astype('datetime64[Y]').astype(int) + 1970} to {data_to_use.time[-1].values.astype('datetime64[Y]').astype(int) + 1970}")
     
     
      for pos, i in enumerate(sorted_clusters):
@@ -496,6 +581,15 @@ if plot_ERA_5 == 1:
                         vmin = min_cuti, 
                         vmax = max_cuti) 
          plt.title(f'Cluster {i+1} (N={cluster_counts[i]})') 
+         
+         if pos  == 0:
+             plt.title("(1) Near-neutral\n")
+         elif pos  == 1:
+             plt.title("(2) Downwelling\n")
+         elif pos  == 2:
+             plt.title("(3) Strong upwelling,\nnorthern focus")
+         elif pos  == 3:
+             plt.title("(4) Strong upwelling,\nsouthern focus")
          
          # Model CUTI   
          cuti = CUTI[CUTI.index.isin(cluster_time_indeces.flatten())].mean()
@@ -522,10 +616,17 @@ if plot_ERA_5 == 1:
     
          
          if pos==num_clusters-1:
-             plt.colorbar(label=param)
+             plt.colorbar(label="CUTI (m$^2$/s)")
              
          ### Plot additional variables:
          for j,par in enumerate(additional_params, start=1):
+             
+             if par == "h_geop_500hP":
+                 label = "500 hPa geopotential\nheight (m)"
+             elif par == "msl":
+                 label = "Mean sea level\npressure (hPa)"
+             else:
+                 label = par
              
              # Calculate mean of each pattern  
              par_2d = era5.sel(time=cluster_time_indeces.flatten()) #  era5[par].values.reshape(era5[par].shape[0], -1)
@@ -569,12 +670,12 @@ if plot_ERA_5 == 1:
     
              
              if pos==num_clusters-1:
-                 plt.colorbar(c, label=par)
+                 plt.colorbar(c, label=label)
       
     
      plt.tight_layout()
 
-
+    # fig.savefig("paper_plots/ERA5_patterns.png", dpi=300)
 
 
 
